@@ -1,0 +1,19 @@
+{
+  "name": "installed-api",
+  "version": "0.1.0",
+  "description": "MCP tools that answer API questions from the code actually installed in the project: Python signatures, docstrings and source from the project's interpreter, TypeScript declarations from node_modules, and installed versions.",
+  "author": {
+    "name": "Adam Wanninger",
+    "email": "adam@awanninger.com"
+  },
+  "homepage": "https://github.com/ajwann/installed-api",
+  "repository": "https://github.com/ajwann/installed-api",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "docs",
+    "python",
+    "typescript",
+    "api"
+  ]
+}
