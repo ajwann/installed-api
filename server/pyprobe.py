@@ -36,16 +36,47 @@ def resolve(target):
     return mod, obj
 
 
+def is_stdlib(top):
+    if top in sys.builtin_module_names:
+        return True
+    names = getattr(sys, "stdlib_module_names", None)  # 3.10+
+    if names is not None:
+        return top in names
+    import os
+    import sysconfig
+    f = getattr(sys.modules.get(top), "__file__", None)
+    if not f:
+        return False
+    f = os.path.realpath(f)
+    stdlib = os.path.realpath(sysconfig.get_paths()["stdlib"])
+    return f.startswith(stdlib + os.sep) and "site-packages" not in f and "dist-packages" not in f
+
+
+def dists_for(metadata, top):
+    """Distribution names providing top-level import name `top`."""
+    pd = getattr(metadata, "packages_distributions", None)  # 3.10+
+    if pd is not None:
+        return pd().get(top) or []
+    out = []
+    for d in metadata.distributions():
+        tops = (d.read_text("top_level.txt") or "").split()
+        if not tops:
+            tops = [p.parts[0].split(".")[0] for p in (d.files or []) if p.parts]
+        if top in tops and d.metadata["Name"]:
+            out.append(d.metadata["Name"])
+    return out
+
+
 def dist_version(module):
     top = (getattr(module, "__name__", "") or "").split(".")[0]
-    if top in getattr(sys, "stdlib_module_names", ()) or top in sys.builtin_module_names:
+    if is_stdlib(top):
         return "stdlib (Python %s)" % sys.version.split()[0]
     try:
         from importlib import metadata
     except ImportError:
         return getattr(module, "__version__", None)
     try:
-        dists = metadata.packages_distributions().get(top) or [top]
+        dists = dists_for(metadata, top) or [top]
         return "%s %s" % (dists[0], metadata.version(dists[0]))
     except Exception:
         return getattr(sys.modules.get(top), "__version__", None)
