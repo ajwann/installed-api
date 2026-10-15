@@ -28,16 +28,24 @@ def project_dir(arg: Optional[str]) -> Path:
     return Path(arg or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).resolve()
 
 
+def search_dirs(project: Path) -> list[Path]:
+    """project and its parents, up to and including the repo root (the first dir holding .git)."""
+    out = []
+    for d in (project, *project.parents):
+        out.append(d)
+        if (d / ".git").exists():
+            break
+    return out
+
+
 def find_python(project: Path) -> tuple[str, str]:
     """(interpreter, how it was found)"""
-    for d in (project, *project.parents):
+    for d in search_dirs(project):
         for venv in (".venv", "venv", ".env", "env"):
             for exe in ("bin/python", "Scripts/python.exe"):
                 p = d / venv / exe
                 if p.exists():
                     return str(p), f"{(d / venv)}"
-        if (d / ".git").exists():
-            break
     venv = os.environ.get("VIRTUAL_ENV")
     if venv and (Path(venv) / "bin" / "python").exists():
         return str(Path(venv) / "bin" / "python"), "$VIRTUAL_ENV"
@@ -76,13 +84,23 @@ def probe(project: Path, req: dict, include_project: bool) -> dict:
 # ---------------------------------------------------------------- node
 
 def node_package_dir(project: Path, package: str) -> Optional[Path]:
-    for d in (project, *project.parents):
+    for d in search_dirs(project):
         cand = d / "node_modules" / package
         if (cand / "package.json").exists():
             return cand
-        if (d / ".git").exists() and d != project:
-            break
     return None
+
+
+def _resolve_package(project: Path, spec: str) -> tuple[str, Optional[Path]]:
+    """Longest installed package name that prefixes a bare import specifier ('firebase/app', '@x/y/z')."""
+    parts = spec.split("/")
+    base = 2 if spec.startswith("@") else 1
+    for k in range(len(parts), base - 1, -1):
+        name = "/".join(parts[:k])
+        pkg_dir = node_package_dir(project, name)
+        if pkg_dir:
+            return name, pkg_dir
+    return "/".join(parts[:base]), None
 
 
 def _types_entry(pkg_dir: Path, meta: dict) -> Optional[Path]:
@@ -136,39 +154,32 @@ def _extract_block(lines: list[str], start: int, max_lines: int = 80) -> str:
     return "\n".join(doc[-25:] + out)
 
 
-def node_lookup(project: Path, package: str, symbol: Optional[str], max_files: int = 400) -> dict:
-    pkg_dir = node_package_dir(project, package)
-    types_pkg = None
-    if not pkg_dir:
-        return {"error": f"{package} is not installed under node_modules (searched upward from {project})"}
-    meta = json.loads((pkg_dir / "package.json").read_text())
-    res: dict[str, Any] = {"package": package, "version": meta.get("version"), "dir": str(pkg_dir)}
+REEXPORT_RE = re.compile(r"^\s*export\s+(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\})\s+from\s+['\"]([^'\"]+)['\"]",
+                         re.M)
+MAX_REEXPORT_DEPTH = 3
+
+
+def _types_for(project: Path, package: str, pkg_dir: Path, meta: dict) -> tuple[Optional[Path], Path, Optional[str]]:
+    """(types entry, dir to search, '@types/x version' if it came from DefinitelyTyped)"""
     entry = _types_entry(pkg_dir, meta)
-    search_root = pkg_dir
-    if entry is None:
-        scoped = package[1:].replace("/", "__") if package.startswith("@") else package
-        types_pkg = node_package_dir(project, f"@types/{scoped}")
-        if types_pkg:
-            tmeta = json.loads((types_pkg / "package.json").read_text())
-            entry = _types_entry(types_pkg, tmeta)
-            search_root = types_pkg
-            res["types_from"] = f"@types/{scoped} {tmeta.get('version')}"
-    if entry is None:
-        res["note"] = "no .d.ts declarations found (untyped package)"
-        return res
-    res["types_entry"] = str(entry)
-    if not symbol:
-        text = entry.read_text(errors="replace")
-        names = re.findall(r"^\s*export\s+(?:declare\s+)?(?:default\s+)?(?:abstract\s+)?"
-                           r"(?:function|class|interface|type|const|let|enum|namespace)\s+(\w+)", text, re.M)
-        reexports = re.findall(r"^\s*export\s+(?:\*|\{[^}]*\})\s+from\s+['\"]([^'\"]+)['\"]", text, re.M)
-        res["exports"] = sorted(set(names))[:300]
-        if reexports:
-            res["re_exports_from"] = reexports[:50]
-        return res
+    if entry is not None:
+        return entry, pkg_dir, None
+    scoped = package[1:].replace("/", "__") if package.startswith("@") else package
+    types_pkg = node_package_dir(project, f"@types/{scoped}")
+    if types_pkg:
+        tmeta = json.loads((types_pkg / "package.json").read_text())
+        entry = _types_entry(types_pkg, tmeta)
+        if entry is not None:
+            return entry, types_pkg, f"@types/{scoped} {tmeta.get('version')}"
+    return None, pkg_dir, None
+
+
+def _find_symbol(search_root: Path, entry: Path, symbol: str, max_files: int) -> tuple[list[dict], int, list[str]]:
+    """(matches, .d.ts files scanned, bare package specifiers re-exported from them)"""
     rx = re.compile(DECL_RE.format(name=re.escape(symbol)), re.M)
     files = sorted(search_root.rglob("*.d.ts"), key=lambda p: (p != entry, len(p.parts)))[:max_files]
-    hits = []
+    hits: list[dict] = []
+    bare: list[str] = []
     for f in files:
         if "node_modules" in f.relative_to(search_root).parts:
             continue
@@ -176,6 +187,9 @@ def node_lookup(project: Path, package: str, symbol: Optional[str], max_files: i
             text = f.read_text(errors="replace")
         except OSError:
             continue
+        for spec in REEXPORT_RE.findall(text):
+            if not spec.startswith((".", "/")) and spec not in bare:
+                bare.append(spec)
         if symbol not in text:
             continue
         lines = text.splitlines()
@@ -186,20 +200,76 @@ def node_lookup(project: Path, package: str, symbol: Optional[str], max_files: i
                     break
         if len(hits) >= 6:
             break
+    return hits, len(files), bare
+
+
+def _follow_reexports(project: Path, specs: list[str], symbol: str, max_files: int,
+                      seen: set[str]) -> tuple[list[dict], list[str], list[str]]:
+    """Search packages re-exported by bare specifier, breadth-first. (matches, chain to the hit, all followed)"""
+    frontier: list[tuple[str, list[str]]] = [(s, []) for s in specs]
+    followed: list[str] = []
+    for _ in range(MAX_REEXPORT_DEPTH):
+        nxt = []
+        for spec, chain in frontier:
+            name, pkg_dir = _resolve_package(project, spec)
+            if pkg_dir is None or name in seen:
+                continue
+            seen.add(name)
+            meta = json.loads((pkg_dir / "package.json").read_text())
+            label = f"{name} {meta['version']}" if meta.get("version") else name
+            followed.append(label)
+            entry, root, _ = _types_for(project, name, pkg_dir, meta)
+            if entry is None:
+                continue
+            hits, _, bare = _find_symbol(root, entry, symbol, max_files)
+            if hits:
+                return hits, chain + [label], followed
+            nxt += [(b, chain + [label]) for b in bare]
+        frontier = nxt
+    return [], [], followed
+
+
+def node_lookup(project: Path, package: str, symbol: Optional[str], max_files: int = 400) -> dict:
+    pkg_dir = node_package_dir(project, package)
+    if not pkg_dir:
+        return {"error": f"{package} is not installed under node_modules (searched upward from {project} "
+                         "to the repo root)"}
+    meta = json.loads((pkg_dir / "package.json").read_text())
+    res: dict[str, Any] = {"package": package, "version": meta.get("version"), "dir": str(pkg_dir)}
+    entry, search_root, types_from = _types_for(project, package, pkg_dir, meta)
+    if types_from:
+        res["types_from"] = types_from
+    if entry is None:
+        res["note"] = "no .d.ts declarations found (untyped package)"
+        return res
+    res["types_entry"] = str(entry)
+    if not symbol:
+        text = entry.read_text(errors="replace")
+        names = re.findall(r"^\s*export\s+(?:declare\s+)?(?:default\s+)?(?:abstract\s+)?"
+                           r"(?:function|class|interface|type|const|let|enum|namespace)\s+(\w+)", text, re.M)
+        reexports = REEXPORT_RE.findall(text)
+        res["exports"] = sorted(set(names))[:300]
+        if reexports:
+            res["re_exports_from"] = reexports[:50]
+        return res
+    hits, scanned, bare = _find_symbol(search_root, entry, symbol, max_files)
+    followed: list[str] = []
+    if not hits and bare:
+        hits, chain, followed = _follow_reexports(project, bare, symbol, max_files, {package})
+        if hits:
+            res["resolved_via"] = [f"{package} {meta['version']}" if meta.get("version") else package, *chain]
     res["matches"] = hits
     if not hits:
-        res["note"] = f"no declaration of {symbol!r} found in {len(files)} .d.ts file(s)"
+        res["note"] = f"no declaration of {symbol!r} found in {scanned} .d.ts file(s)"
+        if followed:
+            res["note"] += f" or in re-exported packages: {', '.join(followed)}"
     return res
 
 
 def node_versions(project: Path, pattern: str) -> dict:
-    nm = None
-    for d in (project, *project.parents):
-        if (d / "node_modules").is_dir():
-            nm = d / "node_modules"
-            break
+    nm = next((d / "node_modules" for d in search_dirs(project) if (d / "node_modules").is_dir()), None)
     if not nm:
-        return {"error": "no node_modules directory found"}
+        return {"error": f"no node_modules directory found (searched upward from {project} to the repo root)"}
     out = []
     for p in sorted(nm.iterdir()):
         dirs = sorted(p.iterdir()) if p.name.startswith("@") and p.is_dir() else [p]

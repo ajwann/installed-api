@@ -132,3 +132,64 @@ def test_node_types_falls_back_to_definitely_typed(project, client):
     assert "@types/plain 1.0.3" in text and "plain(x: number): string" in text
     text, err = client.call("node_types", package="missing-pkg")
     assert err and "not installed" in text
+
+
+def _pkg(root, name, version, dts, **meta):
+    pkg = root / "node_modules" / name
+    pkg.mkdir(parents=True)
+    (pkg / "package.json").write_text(json.dumps({"name": name, "version": version, "types": "index.d.ts", **meta}))
+    (pkg / "index.d.ts").write_text(dts)
+    return pkg
+
+
+def test_node_lookups_stop_at_repo_root(tmp_path):
+    outer = tmp_path / "outer"
+    _pkg(outer, "leak", "1.0.0", "export declare const x: number;\n")
+    repo = outer / "repo"
+    (repo / ".git").mkdir(parents=True)
+    c = Client(repo)
+    try:
+        text, err = c.call("node_versions")
+        assert err and "leak" not in text and "repo root" in text
+        text, err = c.call("node_types", package="leak")
+        assert err and "not installed" in text
+    finally:
+        c.close()
+    _pkg(repo, "ok", "2.0.0", "export declare const y: number;\n")
+    (repo / "sub").mkdir()
+    c = Client(repo / "sub")
+    try:
+        text, err = c.call("node_versions")
+        assert not err and "ok@2.0.0" in text and "leak" not in text
+        assert '"version": "2.0.0"' in c.call("node_types", package="ok")[0]
+    finally:
+        c.close()
+
+
+def test_node_types_follows_package_reexports(project, client):
+    _pkg(project, "wrapper", "1.60.0", "export * from 'core-pkg';\n")
+    _pkg(project, "core-pkg", "1.60.1", "/** A context. */\nexport interface Ctx {\n  close(): Promise<void>;\n}\n")
+    text, err = client.call("node_types", package="wrapper", symbol="Ctx")
+    assert not err and "close(): Promise<void>;" in text and "A context." in text
+    assert json.loads(text.split("\n\n")[0])["resolved_via"] == ["wrapper 1.60.0", "core-pkg 1.60.1"]
+
+
+def test_node_types_follows_scoped_reexport_from_subpath_package(project, client):
+    sub = project / "node_modules" / "fb" / "app"
+    sub.mkdir(parents=True)
+    (project / "node_modules" / "fb" / "package.json").write_text('{"name":"fb","version":"12.0.0"}')
+    (sub / "package.json").write_text('{"name":"fb/app","typings":"dist/index.d.ts"}')
+    (sub / "dist").mkdir()
+    (sub / "dist" / "index.d.ts").write_text("export * from '@fb/app';\n")
+    _pkg(project, "@fb/app", "0.14.6", "export declare function initializeApp(options: object): App;\n")
+    text, err = client.call("node_types", package="fb/app", symbol="initializeApp")
+    assert not err and "initializeApp(options: object): App" in text
+    assert json.loads(text.split("\n\n")[0])["resolved_via"] == ["fb/app", "@fb/app 0.14.6"]
+
+
+def test_node_types_reexport_cycle_terminates(project, client):
+    _pkg(project, "a", "1.0.0", "export * from 'b';\n")
+    _pkg(project, "b", "1.0.0", "export { thing } from 'a';\n")
+    text, err = client.call("node_types", package="a", symbol="Missing")
+    data = json.loads(text)
+    assert not err and data["matches"] == [] and "re-exported packages: b 1.0.0" in data["note"]
