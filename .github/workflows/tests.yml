@@ -14,12 +14,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # oldest supported (README: Python 3.9+) and newest
-        python-version: ["3.9", "3.14"]
+        # every version from the oldest supported (README: Python 3.9+) to the newest
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - run: python -VV
       - run: python -m pip install pytest
       - run: python -m pytest -q
