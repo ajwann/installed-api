@@ -1,5 +1,6 @@
 """Manifest checks: plugin.json is complete, hooks point at real files, bin/ is executable."""
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,3 +35,9 @@ def test_bin_scripts_executable():
 def test_license_and_readme():
     assert (ROOT / "LICENSE").is_file()
     assert len((ROOT / "README.md").read_text().split()) >= 40
+
+
+def test_server_version_matches_plugin_json():
+    m = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
+    src = (ROOT / "server" / "server.py").read_text()
+    assert re.search(r'^SERVER_VERSION = "([^"]+)"$', src, re.M).group(1) == m["version"]
