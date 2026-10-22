@@ -35,7 +35,7 @@ claude plugin validate --strict .
 ```
 
 - **Tests live in `tests/`.** `test_installed_api.py` covers the tools. `test_manifest.py` covers the manifest, the README's minimum length, and that `SERVER_VERSION` in `server/server.py` matches `plugin.json`. Add or update tests for any behavior change.
-- **Bump the version in both places:** `version` in `.claude-plugin/plugin.json` and `SERVER_VERSION` in `server/server.py`. Use a patch bump for fixes and wording, minor for new tools or options, and major for removed tools or options, changed defaults, or dropping a Python version line.
+- **Bump the version in both places:** `version` in `.claude-plugin/plugin.json` and `SERVER_VERSION` in `server/server.py`. Use a patch bump for fixes and wording, minor for new tools or options, and major for removed tools or options, changed defaults, or dropping a Python version line. While the version is below 1.0, a breaking change bumps the minor version instead (0.2.x to 0.3.0).
 - **Keep the README accurate.** Every claim about behavior must match `server/server.py` and `server/pyprobe.py`: the tools table, the interpreter search order, output limits (`max_members`, `max_chars`, declaration block size, files scanned), and "What it runs and stores". Don't invent benchmark numbers. Any size or token figure must come from a real run.
 - **Stay standard-library only and offline.** The server makes no network requests and writes nothing. The README says so, and the directory listing depends on it.
 - **`server/pyprobe.py` runs inside the user's own project interpreter**, which may be older than what we support. Keep it dependency-free and keep its fallbacks for older interpreters.
