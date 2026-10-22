@@ -26,7 +26,7 @@
 # installed-api
 
 [![tests](https://github.com/ajwann/installed-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/ajwann/installed-api/actions/workflows/tests.yml)
-[![version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fajwann%2Finstalled-api%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version)](.claude-plugin/plugin.json)
+[![version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fajwann%2Finstalled-api%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version)](https://github.com/ajwann/installed-api/tags)
 [![license](https://img.shields.io/github/license/ajwann/installed-api)](LICENSE)
 
 **Stop letting your agent guess at APIs. Ask the code you actually installed.**
@@ -66,9 +66,9 @@ declaration blocks, and at most 400 `.d.ts` files scanned per lookup.
 
 - **Code that runs against the versions you pinned**, not the ones the model remembers.
 - **Smaller context, cheaper sessions.** Targeted answers instead of whole files dumped into the conversation.
-- **Nothing to install or configure.** Python 3.9+ standard library only. It finds `.venv`/`venv`, `$VIRTUAL_ENV`, poetry and pdm environments, `node_modules` and `@types/*` on its own.
+- **Nothing to install or configure.** Python 3.11+ standard library only. It finds `.venv`/`venv`, `$VIRTUAL_ENV`, poetry and pdm environments, `node_modules` and `@types/*` on its own.
 - **Private and read-only.** It makes no network requests, sends nothing anywhere, and writes nothing.
-- **Tested on Python 3.9 through 3.15** in CI on every push and PR.
+- **Tested on Python 3.11 through 3.15** in CI on every push and PR.
 
 ### For LLM agents reading this
 
@@ -114,6 +114,13 @@ Example (`py_inspect` with `target: "pytest.approx"`, output trimmed):
 }
 ```
 
+## Supported versions
+
+installed-api supports the Python and Node.js release lines that still receive at least security
+updates; a line is dropped once it reaches end of life. As of October 2026 that is Python 3.11–3.15
+and Node.js 22, 24 and 26. Node.js is never executed: `node_types` and `node_versions` read
+`package.json` and `.d.ts` files from `node_modules`.
+
 ## Install
 
 From Anthropic's plugin directory, once listed: search for `installed-api` in `/plugin directory` in Claude Code, or under **Customize > Plugins** on claude.ai.
@@ -122,7 +129,7 @@ To try it from a clone for one session: `claude --plugin-dir /path/to/installed-
 
 ## What it runs and stores
 
-It is Python 3.9+ standard library only, makes no network requests, and sends nothing anywhere.
+It is Python 3.11+ standard library only, makes no network requests, and sends nothing anywhere.
 
 - Runs the project's Python interpreter (`python -I`) to import and inspect the module you ask about, which runs that package's import-time code.
 - Reads `.d.ts` files and `package.json` under `node_modules`. It writes nothing.
