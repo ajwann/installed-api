@@ -1,0 +1,16 @@
+{
+  "name": "installed-api",
+  "owner": {
+    "name": "ajwann"
+  },
+  "metadata": {
+    "description": "Installed API: answers API questions from the code installed in your project, not from memory"
+  },
+  "plugins": [
+    {
+      "name": "installed-api",
+      "source": "./",
+      "description": "Python signatures, docstrings and source from the project's interpreter, TypeScript declarations from node_modules, and installed versions"
+    }
+  ]
+}

@@ -123,6 +123,12 @@ and Node.js 22, 24 and 26. Node.js is never executed: `node_types` and `node_ver
 
 ## Install
 
+In Claude Code:
+
+```
+/plugin install installed-api --marketplace ajwann/installed-api
+```
+
 From Anthropic's plugin directory, once listed: search for `installed-api` in `/plugin directory` in Claude Code, or under **Customize > Plugins** on claude.ai.
 
 To try it from a clone for one session: `claude --plugin-dir /path/to/installed-api`.
