@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 SERVER_NAME = "installed-api"
-SERVER_VERSION = "0.2.0"
+SERVER_VERSION = "0.3.0"
 HERE = Path(__file__).resolve().parent
 PROBE = HERE / "pyprobe.py"
 DEFAULT_PROTOCOL = "2025-06-18"
