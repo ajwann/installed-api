@@ -26,7 +26,7 @@
 # installed-api
 
 [![tests](https://github.com/ajwann/installed-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/ajwann/installed-api/actions/workflows/tests.yml)
-[![version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fajwann%2Finstalled-api%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version)](https://github.com/ajwann/installed-api/tags)
+[![version](https://img.shields.io/github/v/tag/ajwann/installed-api?sort=semver&label=version)](https://github.com/ajwann/installed-api/tags)
 [![license](https://img.shields.io/github/license/ajwann/installed-api)](LICENSE)
 
 **Stop letting your agent guess at APIs. Ask the code you actually installed.**
