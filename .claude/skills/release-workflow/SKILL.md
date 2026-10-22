@@ -11,6 +11,7 @@ Every change reaches `main` through a pull request whose **tests** checks have a
 
 - Never commit or push to `main` directly, even though GitHub branch protection isn't turned on for this repo yet.
 - Never merge with a failing or pending check. If a failure isn't caused by the change (for example, a runner image dropping a Python build), fix it in the same PR or in a separate one first.
+- Every merged version bump gets its release tag right away (step 4). A version in `plugin.json` on `main` without a matching `vX.Y.Z` tag means the release isn't finished.
 - Never move, delete or re-push a tag once it has been pushed. If a release is wrong, release the next patch version.
 - Bump the version with every change that alters what users install or what the directory listing shows: `server/`, the manifest, the README or the listing icon. A change to CI, tests or this skill alone doesn't need a bump, but it may ride along with one.
 - The identifier is always `installed-api`: the `name` in `plugin.json`, the repo, the folder and the tool namespace. "Installed API" is only the display name in prose. Don't rename the identifier.
@@ -82,18 +83,26 @@ gh pr merge <n> --merge --delete-branch
 
 If the merge is refused, fix the cause. Don't bypass it.
 
+If the PR bumped the version, go straight on to step 4 and tag it. Don't wait to be asked.
+
 ## 4. Tag a release
 
-Only after a version-bumping PR has merged:
+Do this every time a version-bumping PR merges, as the last step of that change. Never tag a commit whose version wasn't bumped, and never tag from a branch.
 
 ```
 git checkout main && git pull
-grep '"version"' .claude-plugin/plugin.json          # e.g. 0.3.0
-git tag -a v0.3.0 -m "installed-api 0.3.0"            # annotated, on main's merge commit
+git log --oneline -1                                  # the PR's merge commit, e.g. 27c8c36
+grep '"version"' .claude-plugin/plugin.json           # e.g. 0.3.0
+grep '^SERVER_VERSION' server/server.py               # must match
+git ls-remote --tags origin                           # v0.3.0 must not exist yet
+gh run list --branch main --workflow tests.yml --limit 1   # the run for that commit: completed, success
+git tag -a v0.3.0 -m "installed-api 0.3.0" <merge-sha>     # annotated, on that merge commit
 git push origin v0.3.0                                # the tag only
 ```
 
-- The tag goes on the merge commit at the tip of `main`, and its version matches `plugin.json` and `SERVER_VERSION` exactly.
+- If the tests run on `main` for the merge commit failed, don't tag. Fix it in a new PR with the next patch version, and tag that.
+- If `main` has moved past the merge commit since, still tag the version-bumping merge commit, not the newer tip.
+- The tag goes on the merge commit of the version-bumping PR, and its version matches `plugin.json` and `SERVER_VERSION` exactly.
 
 Then confirm:
 - `git ls-remote --tags origin` lists the tag, and it appears on https://github.com/ajwann/installed-api/tags
