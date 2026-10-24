@@ -28,6 +28,7 @@
 [![tests](https://github.com/ajwann/installed-api/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/ajwann/installed-api/actions/workflows/tests.yml)
 [![version](https://img.shields.io/github/v/tag/ajwann/installed-api?sort=semver&label=version)](https://github.com/ajwann/installed-api/tags)
 [![license](https://img.shields.io/github/license/ajwann/installed-api)](LICENSE)
+[![Anthropic Directory](https://img.shields.io/badge/Anthropic-Directory-D97757)](https://claude.ai/customize/plugins/id/433c257a-1541-4b46-9fee-9300cebb9fce%40anthropic-plugin-directory)
 
 **Stop letting your agent guess at APIs. Ask the code you actually installed.**
 
